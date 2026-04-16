@@ -616,6 +616,136 @@ namespace PnP.Core.Test.SharePoint
         }
         #endregion
 
+        #region Generic list folder tests (Issue 1680)
+
+        [TestMethod]
+        public async Task AddGenericListFolderViaFolderCollectionTest()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                var listTitle = TestCommon.GetPnPSdkTestAssetName("AddGenericListFolderViaCollection");
+                var list = await context.Web.Lists.AddAsync(listTitle, ListTemplateType.GenericList);
+                try
+                {
+                    list.EnableFolderCreation = true;
+                    await list.UpdateAsync();
+                    await list.EnsurePropertiesAsync(l => l.RootFolder);
+
+                    // Create folder via the Folders collection - this is the scenario from issue 1680
+                    IFolder newFolder = await list.RootFolder.Folders.AddAsync("TestFolder");
+
+                    Assert.IsNotNull(newFolder);
+                    Assert.AreEqual("TestFolder", newFolder.Name);
+
+                    // Verify the folder has associated list item metadata (ListItemAllFields)
+                    var folderReloaded = await context.Web.GetFolderByServerRelativeUrlAsync(
+                        newFolder.ServerRelativeUrl, f => f.ListItemAllFields);
+
+                    Assert.IsNotNull(folderReloaded);
+                    Assert.IsTrue(folderReloaded.ListItemAllFields.Id > 0,
+                        "Folder created via Folders.AddAsync should have an associated list item.");
+                }
+                finally
+                {
+                    await list.DeleteAsync();
+                }
+            }
+        }
+
+        [TestMethod]
+        public async Task AddGenericListFolderViaAddFolderAsyncTest()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                var listTitle = TestCommon.GetPnPSdkTestAssetName("AddGenericListFolderViaAddFolder");
+                var list = await context.Web.Lists.AddAsync(listTitle, ListTemplateType.GenericList);
+                try
+                {
+                    list.EnableFolderCreation = true;
+                    await list.UpdateAsync();
+                    await list.EnsurePropertiesAsync(l => l.RootFolder);
+
+                    // Create folder via AddFolderAsync
+                    IFolder newFolder = await list.RootFolder.AddFolderAsync("TestSubFolder");
+
+                    Assert.IsNotNull(newFolder);
+                    Assert.AreEqual("TestSubFolder", newFolder.Name);
+
+                    // Verify the folder has associated list item metadata
+                    var folderReloaded = await context.Web.GetFolderByServerRelativeUrlAsync(
+                        newFolder.ServerRelativeUrl, f => f.ListItemAllFields);
+
+                    Assert.IsNotNull(folderReloaded);
+                    Assert.IsTrue(folderReloaded.ListItemAllFields.Id > 0,
+                        "Folder created via AddFolderAsync should have an associated list item.");
+                }
+                finally
+                {
+                    await list.DeleteAsync();
+                }
+            }
+        }
+
+        [TestMethod]
+        public async Task EnsureGenericListFolderTest()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                var listTitle = TestCommon.GetPnPSdkTestAssetName("EnsureGenericListFolder");
+                var list = await context.Web.Lists.AddAsync(listTitle, ListTemplateType.GenericList);
+                try
+                {
+                    list.EnableFolderCreation = true;
+                    await list.UpdateAsync();
+                    await list.EnsurePropertiesAsync(l => l.RootFolder);
+
+                    // Create nested folder via EnsureFolderAsync
+                    IFolder deepFolder = await list.RootFolder.EnsureFolderAsync("sub1/sub2");
+
+                    Assert.IsNotNull(deepFolder);
+                    Assert.AreEqual("sub2", deepFolder.Name);
+
+                    // Verify the deepest folder has associated list item metadata
+                    var folderReloaded = await context.Web.GetFolderByServerRelativeUrlAsync(
+                        deepFolder.ServerRelativeUrl, f => f.ListItemAllFields);
+
+                    Assert.IsNotNull(folderReloaded);
+                    Assert.IsTrue(folderReloaded.ListItemAllFields.Id > 0,
+                        "Folder created via EnsureFolderAsync in a generic list should have an associated list item.");
+
+                    // Clean up the parent folder (which also deletes sub2)
+                    var sub1Folder = await list.RootFolder.EnsureFolderAsync("sub1");
+                    await sub1Folder.DeleteAsync();
+                }
+                finally
+                {
+                    await list.DeleteAsync();
+                }
+            }
+        }
+
+        [TestMethod]
+        public async Task AddDocumentLibraryFolderViaFolderCollectionStillWorksTest()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                // Confirm that document library folder creation (the existing path) is not broken
+                IFolder parentFolder = (await context.Web.Lists.GetByTitleAsync("Documents", p => p.RootFolder)).RootFolder;
+                IFolder newFolder = await parentFolder.Folders.AddAsync("TEST_DOCLIB_REGRESSION");
+
+                Assert.IsNotNull(newFolder);
+                Assert.AreEqual("TEST_DOCLIB_REGRESSION", newFolder.Name);
+                Assert.AreNotEqual(default, newFolder.UniqueId);
+
+                await newFolder.DeleteAsync();
+            }
+        }
+
+        #endregion
         [TestMethod]
         public async Task RenameFolderTest()
         {

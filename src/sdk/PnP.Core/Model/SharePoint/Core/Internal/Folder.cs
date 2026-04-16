@@ -28,21 +28,28 @@ namespace PnP.Core.Model.SharePoint
         public Folder()
         {
             // Handler to construct the Add request for this folder
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
             AddApiCallHandler = async (keyValuePairs) =>
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
             {
-                // Given this method can apply on both Web.ContentTypes as List.ContentTypes we're getting the entity info which will 
+                // Given this method can apply on both Web.Folders as List.RootFolder.Folders we're getting the entity info which will 
                 // automatically provide the correct 'parent'
                 var entity = EntityManager.GetClassInfo(GetType(), this);
 
-                //// Adding new content types on a list is not something we should allow
-                //if (entity.Target == typeof(List))
-                //{
-                //throw new ClientException(ErrorType.Unsupported, OnPCoreResources.Exception_Unsupported_AddingContentTypeToList);
-                //}
-
                 string encodedPath = WebUtility.UrlEncode(Name.Replace("'", "''").Replace("%20", " ")).Replace("+", "%20");
+
+                // For non-document-library lists (e.g. GenericList), Folders/AddUsingPath creates a filesystem
+                // folder but does not create the associated list item metadata, so the folder is invisible in
+                // the SharePoint list UI.  AddSubFolderUsingPath properly creates both the folder and its
+                // list item, which is the same endpoint SharePoint itself uses.
+                var parentList = FindParentList(this);
+                if (parentList != null)
+                {
+                    await parentList.EnsurePropertiesAsync(p => p.BaseType).ConfigureAwait(false);
+                    if (parentList.BaseType != ListBaseType.DocumentLibrary)
+                    {
+                        return new ApiCall($"{entity.SharePointGet}/AddSubFolderUsingPath(DecodedUrl='{encodedPath}')", ApiType.SPORest);
+                    }
+                }
+
                 return new ApiCall($"{entity.SharePointGet}/Folders/AddUsingPath(decodedurl='{encodedPath}')", ApiType.SPORest);
             };
         }
@@ -649,28 +656,28 @@ namespace PnP.Core.Model.SharePoint
             return Guid.Empty;
         }
 
-        private Guid GetListIdFromFolder(IDataModelParent folder)
+        /// <summary>
+        /// Walks the parent hierarchy to find a parent <see cref="List"/> object, if any.
+        /// </summary>
+        private static List FindParentList(IDataModelParent current)
         {
-            if (folder != null)
+            while (current != null)
             {
-                if (folder.Parent != null && folder.Parent is List)
+                if (current.Parent is List list)
                 {
-                    return (folder.Parent as List).Id;
+                    return list;
                 }
-                else
-                {
-                    if (folder.Parent == null)
-                    {
-                        return Guid.Empty;
-                    }
-                    else
-                    {
-                        return GetListIdFromFolder(folder.Parent);
-                    }
-                }
+
+                current = current.Parent;
             }
 
-            return Guid.Empty;
+            return null;
+        }
+
+        private Guid GetListIdFromFolder(IDataModelParent folder)
+        {
+            var list = FindParentList(folder);
+            return list?.Id ?? Guid.Empty;
         }
 
         #endregion
