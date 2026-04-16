@@ -715,13 +715,10 @@ namespace PnP.Core.Test.SharePoint
                     Assert.IsNotNull(folderReloaded);
                     Assert.IsTrue(folderReloaded.ListItemAllFields.Id > 0,
                         "Folder created via EnsureFolderAsync in a generic list should have an associated list item.");
-
-                    // Clean up the parent folder (which also deletes sub2)
-                    var sub1Folder = await list.RootFolder.EnsureFolderAsync("sub1");
-                    await sub1Folder.DeleteAsync();
                 }
                 finally
                 {
+                    // Deleting the list also deletes all folders within it
                     await list.DeleteAsync();
                 }
             }
