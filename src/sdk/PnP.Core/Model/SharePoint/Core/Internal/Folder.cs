@@ -656,24 +656,6 @@ namespace PnP.Core.Model.SharePoint
             return Guid.Empty;
         }
 
-        /// <summary>
-        /// Walks the parent hierarchy to find a parent <see cref="List"/> object, if any.
-        /// </summary>
-        private static List FindParentList(IDataModelParent current)
-        {
-            while (current != null)
-            {
-                if (current.Parent is List list)
-                {
-                    return list;
-                }
-
-                current = current.Parent;
-            }
-
-            return null;
-        }
-
         private Guid GetListIdFromFolder(IDataModelParent folder)
         {
             var list = FindParentList(folder);
@@ -886,6 +868,25 @@ namespace PnP.Core.Model.SharePoint
         #endregion
 
         #region Helper methods
+
+        /// <summary>
+        /// Walks the parent hierarchy to find a parent <see cref="List"/> object, if any.
+        /// </summary>
+        private static List FindParentList(IDataModelParent current)
+        {
+            while (current != null)
+            {
+                if (current.Parent is List list)
+                {
+                    return list;
+                }
+
+                current = current.Parent;
+            }
+
+            return null;
+        }
+
         internal static bool ErrorIndicatesFileDoesNotExists(SharePointRestError error)
         {
             // Indicates the file did not exist
